@@ -26,6 +26,7 @@ type exp = I of int
          | AddF of exp * exp
          | SubF of exp * exp
          | MulF of exp * exp
+         | Parenthese of exp list
 ;;
 
 type mon_code = { mutable mon_texte: text; mutable mon_data: data};;
@@ -55,7 +56,7 @@ let est_operation c = match c with
 ;;
 
 let est_separe s i =
-  if i = (String.length s)-1 then true
+  if i = (String.length s)-1 || s.[i] = '(' || s.[i] = ')' then true
   else let f = est_operation in (f (cdc s.[i]) && (not (f (cdc s.[i+1])) ) || (not (f (cdc s.[i])) && f (cdc s.[i+1])) )
 ;;
 
@@ -65,12 +66,34 @@ let analyseur_lexical s0 =
   let n = String.length s in
   let i = ref 0 in
   let w = ref "" in
-  while !i < n do
+  while !i < n-1 do
     (if (est_separe s (!i)) then (w := (!w)^(cdc s.[!i]);l := (!w)::(!l); w := "")
     else w := (!w)^(cdc s.[!i]));
     incr i
   done;
+  if s.[n-1] = ')' then l := ")"::(!w)::(!l) else l := (!w)::(!l);
   List.rev !l
+;;
+
+exception Code_mal_parenthese;;
+exception Code_mal_parenthese2;;
+
+let rec parenthesage l = match l with
+    | x::"+"::y::l -> let a,b = parenthesage l in Add0(I (int_of_string x),I (int_of_string y))::a,b
+    | "+"::x::l -> let a,b = parenthesage l in Add(I (int_of_string x))::a,b
+    | x::"-"::y::l -> let a,b = parenthesage l in Sub0(I (int_of_string x),I (int_of_string y))::a,b
+    | "-"::x::l -> let a,b = parenthesage l in Sub(I (int_of_string x))::a,b
+    | x::"*"::y::l -> let a,b = parenthesage l in Mul0(I (int_of_string x),I (int_of_string y))::a,b
+    | "*"::x::l -> let a,b = parenthesage l in Mul(I (int_of_string x))::a,b
+    | x::"/"::y::l -> let a,b = parenthesage l in Div0(I (int_of_string x),I (int_of_string y))::a,b
+    | "/"::x::l -> let a,b = parenthesage l in Div(I (int_of_string x))::a,b
+    | x::"%"::y::l -> let a,b = parenthesage l in Mod0(I (int_of_string x),I (int_of_string y))::a,b
+    | "%"::x::l -> let a,b = parenthesage l in Mod(I (int_of_string x))::a,b
+    | "("::x::")"::l -> parenthesage (x::l)
+    | "("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Parenthese(a)::c,d
+    | ")"::l -> [],l
+    | x::l -> let a,b = parenthesage l in I (int_of_string x)::(a),b
+    | [] -> raise Code_mal_parenthese2
 ;;
 
 let rec analyseur_syntaxique l = match l with
@@ -84,8 +107,11 @@ let rec analyseur_syntaxique l = match l with
     | "/"::x::l -> Div(I (int_of_string x))::(analyseur_syntaxique l)
     | x::"%"::y::l -> Mod0(I (int_of_string x),I (int_of_string y))::(analyseur_syntaxique l)
     | "%"::x::l -> Mod(I (int_of_string x))::(analyseur_syntaxique l)
+    | "("::x::")"::l -> analyseur_syntaxique (x::l)
+    | "("::l -> let a,b = parenthesage l in Parenthese(a)::(analyseur_syntaxique b)
+    | ")"::l -> raise Code_mal_parenthese
+    | x::l -> I (int_of_string x)::(analyseur_syntaxique l)
     | [] -> []
-    | _ -> failwith "..."
 ;;
 
 let add0 code e1 e2 =
@@ -234,18 +260,20 @@ let eval s =
     | Mod(e1)::l -> let c = aux l in let c2 = (modl c e1) in
                                      c2.mon_texte <- c2.mon_texte ++  movq (reg rdi) (reg r15);
                                      c2
-    | [] -> { mon_texte =
-                globl "main"
-                ++ label "main"
-                ++ movq (imm 0) (reg r15);
-              mon_data =
-                label "message"
-                ++ string "%d\n"}
+    | Parenthese(ll)::l -> let c1 = aux ll in let c2 = aux l in
+                                              c2.mon_texte <- c2.mon_texte ++ c1.mon_texte;
+                                              c2
+    | [] -> { mon_texte = nop;
+              mon_data = nop}
+    | [e1] -> { mon_texte = movq (imm (conversion_entier e1)) (reg r15); mon_data = nop }
     | _ -> failwith "Erreur eval"
   in let c = open_out "print.s" in
      let fmt = formatter_of_out_channel c in
      let code = aux a in
-     code.mon_texte <- code.mon_texte
+     code.mon_texte <- globl "main"
+                       ++ label "main"
+                       ++ movq (imm 0) (reg r15)
+                       ++ code.mon_texte
                        ++ movq (reg r15) (reg rdi)
                        ++ call "print_int"
                        ++ ret
@@ -253,9 +281,10 @@ let eval s =
                        ++ movq (reg rdi) (reg rsi)
                        ++ movq (ilab "message") (reg rdi)
                        ++ call "printf";
+     code.mon_data <- label "message" ++ string "%d\n";
      let codefinal = {text = code.mon_texte; data = code.mon_data} in
      X86_64.print_program fmt (codefinal);
      close_out c
 ;;
 
-eval " 158 + 548 % 57 * 58  / 7 + 6 - 9";;
+eval "12 + (5 * 3)";;
