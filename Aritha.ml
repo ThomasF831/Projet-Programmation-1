@@ -10,7 +10,6 @@ open X86_64
 type exp = I of int
          | F of float
          | P of exp
-         | Pos of int
          | Neg of exp
          | Int of exp
          | Float of exp
@@ -18,9 +17,12 @@ type exp = I of int
          | Add of exp
          | Sub0 of exp * exp
          | Sub of exp
-         | Div of exp * exp
-         | Mul of exp * exp
-         | Mod of exp * exp
+         | Div0 of exp * exp
+         | Div of exp
+         | Mul0 of exp * exp
+         | Mul of exp
+         | Mod0 of exp * exp
+         | Mod of exp
          | AddF of exp * exp
          | SubF of exp * exp
          | MulF of exp * exp
@@ -30,15 +32,25 @@ type mon_code = { mutable mon_texte: text; mutable mon_data: data};;
 
 exception Argument_non_I of exp;;
 
+
+let cdc = String.make 1;; (* Convertit un char en string *)
+
+let simplifie s =
+  let t = ref "" in
+  for i = 0 to (String.length s -1) do
+    if s.[i] != ' ' then t := !t ^ (cdc s.[i]);
+    if s.[i] ='.' && (s.[i-1] = '+' || s.[i-1] = '*' || s.[i-1] = '-') then t := !t ^ ",";
+  done;
+  !t
+;;
+
 let conversion_entier e = match e with
   | I x -> x
   | x -> raise (Argument_non_I x)
 ;;
 
-let cdc = String.make 1;; (* Convertit un char en string *)
-
 let est_operation c = match c with
-  | "+" | "-" | "*" | "/" | "%" | "." | "f" | "l" | "o" | "a" | "t" | "i" | "n" -> true
+  | "+" | "-" | "*" | "/" | "%" | "," | "f" | "l" | "o" | "a" | "t" | "i" | "n" -> true
   | _ -> false
 ;;
 
@@ -47,7 +59,8 @@ let est_separe s i =
   else let f = est_operation in (f (cdc s.[i]) && (not (f (cdc s.[i+1])) ) || (not (f (cdc s.[i])) && f (cdc s.[i+1])) )
 ;;
 
-let analyseur_lexical s =
+let analyseur_lexical s0 =
+  let s = simplifie s0 in
   let l = ref [] in
   let n = String.length s in
   let i = ref 0 in
@@ -65,9 +78,12 @@ let rec analyseur_syntaxique l = match l with
     | "+"::x::l -> Add(I (int_of_string x))::(analyseur_syntaxique l)
     | x::"-"::y::l -> Sub0(I (int_of_string x),I (int_of_string y))::(analyseur_syntaxique l)
     | "-"::x::l -> Sub(I (int_of_string x))::(analyseur_syntaxique l)
-    | x::"*"::y::l -> Mul(I (int_of_string x),I (int_of_string y))::(analyseur_syntaxique l)
-    | x::"/"::y::l -> Div(I (int_of_string x),I (int_of_string y))::(analyseur_syntaxique l)
-    | x::"%"::y::l -> Mod(I (int_of_string x),I (int_of_string y))::(analyseur_syntaxique l)
+    | x::"*"::y::l -> Mul0(I (int_of_string x),I (int_of_string y))::(analyseur_syntaxique l)
+    | "*"::x::l -> Mul(I (int_of_string x))::(analyseur_syntaxique l)
+    | x::"/"::y::l -> Div0(I (int_of_string x),I (int_of_string y))::(analyseur_syntaxique l)
+    | "/"::x::l -> Div(I (int_of_string x))::(analyseur_syntaxique l)
+    | x::"%"::y::l -> Mod0(I (int_of_string x),I (int_of_string y))::(analyseur_syntaxique l)
+    | "%"::x::l -> Mod(I (int_of_string x))::(analyseur_syntaxique l)
     | [] -> []
     | _ -> failwith "..."
 ;;
@@ -125,6 +141,16 @@ let mul0 code e1 e2 =
   c
 ;;
 
+let mul code e1 =
+  let x = conversion_entier e1 in
+  let c = { mon_texte = code.mon_texte; mon_data = code.mon_data} in
+  c.mon_texte <- c.mon_texte
+                 ++ movq (reg r15) (reg rdi)
+                 ++ movq (imm x) (reg rsi)
+                 ++ imulq (reg rsi) (reg rdi);
+  c
+;;
+
 let div0 code e1 e2 =
   let x = conversion_entier e1 in
   let y = conversion_entier e2 in
@@ -133,6 +159,18 @@ let div0 code e1 e2 =
                  ++ movq (imm x) (reg rax)
                  ++ movq (imm 0) (reg rdx)
                  ++ movq (imm y) (reg rcx)
+                 ++ idivq (reg rcx)
+                 ++ movq (reg rax) (reg rdi);
+  c
+;;
+
+let div code e1 =
+  let x = conversion_entier e1 in
+  let c = { mon_texte = code.mon_texte; mon_data = code.mon_data} in
+  c.mon_texte <- c.mon_texte
+                 ++ movq (reg r15) (reg rax)
+                 ++ movq (imm 0) (reg rdx)
+                 ++ movq (imm x) (reg rcx)
                  ++ idivq (reg rcx)
                  ++ movq (reg rax) (reg rdi);
   c
@@ -151,6 +189,18 @@ let modl0 code e1 e2 =
   c
 ;;
 
+let modl code e1 =
+  let x = conversion_entier e1 in
+  let c = { mon_texte = code.mon_texte; mon_data = code.mon_data} in
+  c.mon_texte <- c.mon_texte
+                 ++ movq (reg r15) (reg rax)
+                 ++ movq (imm 0) (reg rdx)
+                 ++ movq (imm x) (reg rcx)
+                 ++ idivq (reg rcx)
+                 ++ movq (reg rdx) (reg rdi);
+  c
+;;
+
 let eval s =
   let a = List.rev (analyseur_syntaxique( analyseur_lexical s)) in
   let rec aux a = match a with
@@ -160,13 +210,30 @@ let eval s =
     | Add(e1)::l -> let c = aux l in let c2 = (add c e1) in
                                      c2.mon_texte <- c2.mon_texte ++  movq (reg rdi) (reg r15);
                                      c2
-    | Sub0(e1,e2)::l -> sub0 (aux l) e1 e2
+    | Sub0(e1,e2)::l ->  let c = sub0 (aux l) e1 e2 in
+                    c.mon_texte <- c.mon_texte ++ movq (reg rdi) (reg r15);
+                    c
     | Sub(e1)::l -> let c = aux l in let c2 = (sub c e1) in
                                      c2.mon_texte <- c2.mon_texte ++  movq (reg rdi) (reg r15);
                                      c2
-    | Mul(e1,e2)::l -> mul0 (aux l) e1 e2
-    | Div(e1,e2)::l -> div0 (aux l) e1 e2
-    | Mod(e1,e2)::l -> modl0 (aux l) e1 e2
+    | Mul0(e1,e2)::l ->  let c = mul0 (aux l) e1 e2 in
+                    c.mon_texte <- c.mon_texte ++ movq (reg rdi) (reg r15);
+                    c
+    | Mul(e1)::l -> let c = aux l in let c2 = (mul c e1) in
+                                     c2.mon_texte <- c2.mon_texte ++  movq (reg rdi) (reg r15);
+                                     c2
+    | Div0(e1,e2)::l ->   let c = div0 (aux l) e1 e2 in
+                    c.mon_texte <- c.mon_texte ++ movq (reg rdi) (reg r15);
+                    c
+    | Div(e1)::l -> let c = aux l in let c2 = (div c e1) in
+                                     c2.mon_texte <- c2.mon_texte ++  movq (reg rdi) (reg r15);
+                                     c2
+    | Mod0(e1,e2)::l ->   let c = modl0 (aux l) e1 e2 in
+                    c.mon_texte <- c.mon_texte ++ movq (reg rdi) (reg r15);
+                    c
+    | Mod(e1)::l -> let c = aux l in let c2 = (modl c e1) in
+                                     c2.mon_texte <- c2.mon_texte ++  movq (reg rdi) (reg r15);
+                                     c2
     | [] -> { mon_texte =
                 globl "main"
                 ++ label "main"
@@ -191,4 +258,4 @@ let eval s =
      close_out c
 ;;
 
-eval "-8+27-11";;
+eval " 158 + 548 % 57 * 58  / 7 + 6 - 9";;
