@@ -5,6 +5,10 @@ open Analyse
 
 type mon_code = { mutable mon_texte: text; mutable mon_data: data};;
 
+let nbr_float = ref 0;;
+
+let declare_float = ref "";;
+
 let empile x code =
   let c = { mon_texte = code.mon_texte ; mon_data = code.mon_data } in
   c.mon_texte <- pushq (imm x);
@@ -63,6 +67,22 @@ let modulo code =
   c
 ;;
 
+let empileF x code =
+  let c = { mon_texte = code.mon_texte ; mon_data = code.mon_data } in
+  c.mon_texte <-  c.mon_texte
+	          ++ inline ("        movsd float"^(string_of_int (!nbr_float))^" (%rip), %xmm0\n")
+	          ++ inline "        movsd %xmm0, -8(%rsp)\n"
+	          ++ inline "        subq $8, %rsp\n";
+                  declare_float := (!declare_float)^"\nfloat"^(string_of_int !nbr_float)^":\n        .double "^(string_of_float x)^"\n\n";
+  incr nbr_float;
+  c
+;;
+
+let addition code =
+  let c = { mon_texte = code.mon_texte; mon_data = code.mon_data} in
+  c.mon_texte <- c.mon_texte
+                 ++ 
+
 exception Erreur_evaluation;;
 
 let rec evaluation arbre = match arbre with
@@ -87,10 +107,11 @@ let rec evaluation arbre = match arbre with
                        let c2 = evaluation y in
                        let c = { mon_texte = c1.mon_texte ++ c2.mon_texte; mon_data = nop } in
                        modulo c
+  | Flottant x -> empileF x { mon_texte = nop ; mon_data = nop }
   | _ -> raise Erreur_evaluation
 ;;
 
-let print_code code0 =
+let print_code_entier code0 =
   let code = { mon_texte = code0.mon_texte ; mon_data = code0.mon_data } in
   let c = open_out "print.s" in
   let fmt = formatter_of_out_channel c in
@@ -111,10 +132,35 @@ let print_code code0 =
   close_out c
 ;;
 
-let interprete s =
-  let a = Analyse.arbre_syntaxique s in
-  let c = evaluation a in
-  print_code c
+let print_code_flottant code0 =
+  let code = { mon_texte = code0.mon_texte ; mon_data = code0.mon_data } in
+  let c = open_out "print.s" in
+  let fmt = formatter_of_out_channel c in
+  code.mon_texte <- globl "main"
+                    ++ inline !declare_float
+                    ++ label "main"
+                    ++ code.mon_texte
+                    ++ inline "\n        addq $8, %rsp\n"
+                    ++ call "print_float"
+                    ++ inline "        ret\n\n"
+                    ++ label"print_float"
+                    ++ inline
+"        movl $message, %edi\n        movq $1, %rax\n        call printf\n        ret\n\n        .data\n        message:\n        .string \"%f\\n\"\n";
+  let codefinal = {text = code.mon_texte; data = nop} in
+  X86_64.print_program fmt (codefinal);
+  close_out c
 ;;
 
-interprete "2 + 3";;
+let rec typ arbre = match arbre with
+  | Addition(x,y) | Soustraction(x,y) | Multiplication(x,y) | Division(x,y) | Modulo(x,y) -> true
+  | _ -> false
+;;
+
+let interprete s =
+  let a = Analyse.arbre_syntaxique s in
+  let t = typ a in
+  let c = evaluation a in
+  if t then print_code_entier c;;
+;;
+
+let c = evaluation (Flottant(3.8)) in print_code_flottant c;;
