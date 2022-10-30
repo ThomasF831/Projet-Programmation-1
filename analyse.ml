@@ -1,3 +1,5 @@
+(* Ce type est utilisé pour la représentation de la formule sous forme de liste, il contient pour chaque opération un constructeur a deux arguments 
+ * pour la première opération de l'instruction et un constructeur à deux arguments pour les suivants *)
 type exp = I of int
          | F of float
          | P of exp
@@ -22,6 +24,7 @@ type exp = I of int
          | Parenthese of exp list
 ;;
 
+(* Ce type est utilisé pour représenter l'expression sous forme d'arbre *)
 type arbre = Entier of int
            | Flottant of float
            | Addition of arbre * arbre
@@ -38,9 +41,9 @@ type arbre = Entier of int
 
 exception Argument_non_I of exp;;
 
-
 let cdc = String.make 1;; (* Convertit un char en string *)
 
+(* simplifie retire les espaces de la chaîne de caractère passée en paramètre et remplace les '.' des opérations par des ',' *)
 let simplifie s =
   let t = ref "" in
   let suppr = ref 0 in 
@@ -61,16 +64,19 @@ let conversion_entier e = match e with
   | x -> raise (Argument_non_I x)
 ;;
 
+(* Permet de différencier les opérations des nombres *)
 let est_operation c = match c with
   | "+" | "-" | "*" | "/" | "%" | "," -> true
   | _ -> false
 ;;
 
+(* Reconnaît la fin d'un lexème *)
 let est_separe s i =
   if i = (String.length s)-1 || s.[i] = '(' || s.[i] = ')' || s.[i+1] = '(' || s.[i+1] = ')' || s.[i] = 'f' || s.[i] = 'i' then true
   else let f = est_operation in (f (cdc s.[i]) && (not (f (cdc s.[i+1])) ) || (not (f (cdc s.[i])) && f (cdc s.[i+1])) )
 ;;
 
+(* Renvoie la liste des lexèmes dans l'ordre de l'expression sous forme de chaîne de caractères *)
 let analyseur_lexical s0 =
   let s = simplifie s0 in
   let l = ref [] in
@@ -89,8 +95,11 @@ let analyseur_lexical s0 =
 exception Code_mal_parenthese;;
 exception Code_mal_parenthese2;;
 
+(* Convertit un lexème représentant un nombre en un exp *)
 let cdr_a_exp x = try (I (int_of_string x)) with Failure _ -> (F (float_of_string x));;
 
+(* Parcourt une liste de lexèmes jusqu'à tomber sur une parenthèse fermante puis renvoie la liste d'exp construite à partir des lexèmes parcourus et la portion de
+ * liste qu'il reste à parcourir *)
 let rec parenthesage l = match l with
     | "("::x::")"::l -> parenthesage (x::l)
     | "("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Parenthese(a)::c,d
@@ -133,6 +142,7 @@ let rec parenthesage l = match l with
     | [] -> raise Code_mal_parenthese2
 ;;
 
+(* Transforme la liste de lexèmes en une liste d'éléments du type exp *)
 let rec analyseur_syntaxique l = match l with
     | "("::x::")"::l -> analyseur_syntaxique (x::l)
     | "("::l -> let a,b = parenthesage l in Parenthese(a)::(analyseur_syntaxique b)
@@ -179,6 +189,7 @@ let rec analyseur_syntaxique l = match l with
 
 let analyser x = analyseur_syntaxique(analyseur_lexical x);;
 
+(* Transforme la liste d'éléments du type exp en un arbre *)
 let rec exp_a_arbre exp = match exp with
   | (I x) -> Entier x
   | (F x) -> Flottant x
@@ -195,7 +206,7 @@ let rec exp_a_arbre exp = match exp with
    * | In x -> Int(exp_a_arbre x) *)
   | _ -> Entier 0
 and fabrique_arbre l =
-  let a = ref (Entier 0) in
+  let a = ref (Entier 0) in (* stocke l'arbre des opérations déjà créées *)
   let rec aux l = match l with
     | Parenthese(l)::ll -> a := fabrique_arbre l; aux ll
     | (Add e)::l -> a := Addition(!a, exp_a_arbre e); aux l
