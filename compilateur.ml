@@ -67,21 +67,45 @@ let modulo code =
   c
 ;;
 
+let pushfloat () = inline "        movsd %xmm0, -8(%rsp)\n        subq $8, %rsp\n";;
+let popfloat reg = inline ("        movsd (%rsp), "^reg^"\n        addq $8, %rsp\n");;
+
 let empileF x code =
   let c = { mon_texte = code.mon_texte ; mon_data = code.mon_data } in
   c.mon_texte <-  c.mon_texte
 	          ++ inline ("        movsd float"^(string_of_int (!nbr_float))^" (%rip), %xmm0\n")
-	          ++ inline "        movsd %xmm0, -8(%rsp)\n"
-	          ++ inline "        subq $8, %rsp\n";
+                  ++ pushfloat ();
                   declare_float := (!declare_float)^"\nfloat"^(string_of_int !nbr_float)^":\n        .double "^(string_of_float x)^"\n\n";
   incr nbr_float;
   c
 ;;
 
-let addition code =
+let additionF code =
   let c = { mon_texte = code.mon_texte; mon_data = code.mon_data} in
   c.mon_texte <- c.mon_texte
-                 ++ 
+                 ++ popfloat "%xmm0"
+                 ++ popfloat "%xmm1"
+                 ++ inline "        addsd %xmm1, %xmm0\n"
+                 ++ pushfloat();
+  c;;
+
+let soustractionF code =
+  let c = { mon_texte = code.mon_texte; mon_data = code.mon_data} in
+  c.mon_texte <- c.mon_texte
+                 ++ popfloat "%xmm1"
+                 ++ popfloat "%xmm0"
+                 ++ inline "        mulsd %xmm1, %xmm0\n"
+                 ++ pushfloat();
+  c;;
+
+let multiplicationF code =
+  let c = { mon_texte = code.mon_texte; mon_data = code.mon_data} in
+  c.mon_texte <- c.mon_texte
+                 ++ popfloat "%xmm0"
+                 ++ popfloat "%xmm1"
+                 ++ inline "        mulsd %xmm1, %xmm0\n"
+                 ++ pushfloat();
+  c;;
 
 exception Erreur_evaluation;;
 
@@ -108,7 +132,18 @@ let rec evaluation arbre = match arbre with
                        let c = { mon_texte = c1.mon_texte ++ c2.mon_texte; mon_data = nop } in
                        modulo c
   | Flottant x -> empileF x { mon_texte = nop ; mon_data = nop }
-  | _ -> raise Erreur_evaluation
+  | AdditionF(x,y) -> let  c1 = evaluation x in
+                       let c2 = evaluation y in
+                       let c = { mon_texte = c1.mon_texte ++ c2.mon_texte; mon_data = nop } in
+                       additionF c
+  | SoustractionF(x,y) -> let  c1 = evaluation x in
+                       let c2 = evaluation y in
+                       let c = { mon_texte = c1.mon_texte ++ c2.mon_texte; mon_data = nop } in
+                       soustractionF c
+  | MultiplicationF(x,y) ->  let  c1 = evaluation x in
+                       let c2 = evaluation y in
+                       let c = { mon_texte = c1.mon_texte ++ c2.mon_texte; mon_data = nop } in
+                       multiplicationF c
 ;;
 
 let print_code_entier code0 =
@@ -140,8 +175,9 @@ let print_code_flottant code0 =
                     ++ inline !declare_float
                     ++ label "main"
                     ++ code.mon_texte
-                    ++ inline "\n        addq $8, %rsp\n"
+                    ++ popfloat "%xmm0"
                     ++ call "print_float"
+                    ++ movq (imm 0) (reg rax)
                     ++ inline "        ret\n\n"
                     ++ label"print_float"
                     ++ inline
@@ -160,7 +196,7 @@ let interprete s =
   let a = Analyse.arbre_syntaxique s in
   let t = typ a in
   let c = evaluation a in
-  if t then print_code_entier c;;
+  if t then print_code_entier c else print_code_flottant c;;
 ;;
 
-let c = evaluation (Flottant(3.8)) in print_code_flottant c;;
+interprete "(2.3 +. 8.4)*. 8.2";;
