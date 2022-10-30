@@ -95,20 +95,36 @@ let rec parenthesage l = match l with
     | "("::x::")"::l -> parenthesage (x::l)
     | "("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Parenthese(a)::c,d
     | ")"::l -> [],l
+    | x::"+"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Add0(I (int_of_string x),Parenthese(a))::c,d
+    | "+"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Add(Parenthese(a))::c,d
     | x::"+"::y::l -> let a,b = parenthesage l in Add0(I (int_of_string x),I (int_of_string y))::a,b
     | "+"::x::l -> let a,b = parenthesage l in Add(I (int_of_string x))::a,b
+    | x::"+,"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in AddF0(F (float_of_string x),Parenthese(a))::c,d
+    | "+,"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in AddF(Parenthese(a))::c,d
     | x::"+,"::y::l -> let a,b = parenthesage l in AddF0(F (float_of_string x),F (float_of_string y))::a,b
-    | "+,"::x::l -> let a,b = parenthesage l in AddF(F (float_of_string x))::a,b                                    
+    | "+,"::x::l -> let a,b = parenthesage l in AddF(F (float_of_string x))::a,b  
+    | x::"-"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Sub0(I (int_of_string x),Parenthese(a))::c,d
+    | "-"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Sub(Parenthese(a))::c,d
     | x::"-"::y::l -> let a,b = parenthesage l in Sub0(I (int_of_string x),I (int_of_string y))::a,b
     | "-"::x::l -> let a,b = parenthesage l in Sub(I (int_of_string x))::a,b
+    | x::"-,"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in SubF0(F (float_of_string x),Parenthese(a))::c,d
+    | "-,"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in SubF(Parenthese(a))::c,d
     | x::"-,"::y::l -> let a,b = parenthesage l in SubF0(F (float_of_string x),F (float_of_string y))::a,b
-    | "-,"::x::l -> let a,b = parenthesage l in SubF(F (float_of_string x))::a,b                               
+    | "-,"::x::l -> let a,b = parenthesage l in SubF(F (float_of_string x))::a,b
+    | x::"*"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Mul0(I (int_of_string x),Parenthese(a))::c,d
+    | "*"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Mul(Parenthese(a))::c,d
     | x::"*"::y::l -> let a,b = parenthesage l in Mul0(I (int_of_string x),I (int_of_string y))::a,b
     | "*"::x::l -> let a,b = parenthesage l in Mul(I (int_of_string x))::a,b
+    | x::"*,"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in MulF0(F (float_of_string x),Parenthese(a))::c,d
+    | "*,"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in MulF(Parenthese(a))::c,d
     | x::"*,"::y::l -> let a,b = parenthesage l in MulF0(F (float_of_string x),F (float_of_string y))::a,b
     | "*,"::x::l -> let a,b = parenthesage l in MulF(F (float_of_string x))::a,b
+    | x::"/"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Div0(I (int_of_string x),Parenthese(a))::c,d
+    | "/"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Div(Parenthese(a))::c,d
     | x::"/"::y::l -> let a,b = parenthesage l in Div0(I (int_of_string x),I (int_of_string y))::a,b
     | "/"::x::l -> let a,b = parenthesage l in Div(I (int_of_string x))::a,b
+    | x::"%"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Mod0(I (int_of_string x),Parenthese(a))::c,d
+    | "%"::"("::l -> let a,b = parenthesage l in let c,d = parenthesage b in Mod(Parenthese(a))::c,d   
     | x::"%"::y::l -> let a,b = parenthesage l in Mod0(I (int_of_string x),I (int_of_string y))::a,b
     | "%"::x::l -> let a,b = parenthesage l in Mod(I (int_of_string x))::a,b
     (* | "f"::x::l -> let a,b = parenthesage l in Fl(I (int_of_string x))::a,b
