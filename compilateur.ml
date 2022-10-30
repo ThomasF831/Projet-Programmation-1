@@ -1,6 +1,7 @@
 open Format
 open X86_64
 open Analyse
+open Lecture_fichier
 ;;
 
 type mon_code = { mutable mon_texte: text; mutable mon_data: data};;
@@ -199,4 +200,4 @@ let interprete s =
   if t then print_code_entier c else print_code_flottant c;;
 ;;
 
-interprete "(2.3 +. 8.4)*. 8.2";;
+interprete (extraire_string ());;
