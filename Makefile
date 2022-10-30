@@ -1,9 +1,12 @@
-all: aritha assembleur
+all: aritha rapport
 
-aritha: x86_64.ml analyse.ml Aritha.ml
-	ocamlc x86_64.ml analyse.ml compilateur.ml -o Aritha
+aritha: x86_64.ml lecture_fichier.ml analyse.ml compilateur.ml
+	ocamlc x86_64.ml lecture_fichier.ml analyse.ml compilateur.ml -o Aritha
 	./Aritha
-	
-assembleur: print.s
+
+rapport: rapport.tex
+	pdflatex rapport.tex
+
+compile_assembleur:
 	gcc -no-pie print.s -o exc
 	./exc
