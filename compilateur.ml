@@ -95,7 +95,7 @@ let soustractionF code =
   c.mon_texte <- c.mon_texte
                  ++ popfloat "%xmm1"
                  ++ popfloat "%xmm0"
-                 ++ inline "        mulsd %xmm1, %xmm0\n"
+                 ++ inline "        subsd %xmm1, %xmm0\n"
                  ++ pushfloat();
   c;;
 
