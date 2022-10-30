@@ -1,0 +1,69 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{listings}
+\lstset{language=bash}
+\title{Rapport projet programmation}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\section{Gestion des entiers sans les parenthèses}
+
+\subsection{L'analyseur lexical}
+J'ai commencé par faire en sorte que mon programme permette d'effectuer les opérations sur les entiers sans les parenthèses. Dans un premier temps, j'ai utilisé une chaîne de caractère que j'écrivais directement dans le code plutôt que de lire dans un fichier. Pour l'analyseur lexical je parcours la chaîne de caractère et lorsque je tombe sur un caractère représentant une opération, j'ajoute dans une liste les carctères précédents (jusqu'au dernier symbole d'opération rencontré) puis j'aoute le symbole d'opération à la liste et je recommence ainsi de suite... Il faut aussi convertir les caractères en chaînes de caractère pour pouvoir les utiliser par la suite. 
+
+\subsection{L'analyseur syntaxique}
+Pour faire l'analyseur syntaxique, je voulais faire une liste des opérations à faire à l'aide du type Exp pour les faire dans le bon ordre. Le problème que j'ai rencontré a été qu'en parcourant la liste des lexèmes, je devais mettre dans la liste que j'étais en train de créer une opération avec un seul nombre mais comme il y a un nombre de plus que d'opérations, j'ai mis dans le type exp pour chaque opération un Constructeur à deux arguments qui correspond à la première opération en luisant de droite à gauche puis un constructeur à un argument lorsqu'on a déjà fait des opérations. L'idée c'est qu'on fait l'opération la plus à gauche puis on lit les opérations vers la droite en réutilisant le résultat des opérations précédentes.
+
+\subsection{Le compilateur}
+Je n'ai pas conservé les opérations que j'avais écrites à ce moment là parce qu'elles ne se généralisaient pas très bien aux cas suivants mais ce que je faisais c'est que je commençais par stocker 0 dans le registre r15 puis : à la première opération rencontrée, j'effectue l'opération en assembleur et je stocke le résultat dans r15. Par la suite, on effectue les opérations avec l'argument du constructeur rencontré dans la liste et la valeur du registre r15.
+
+\section{Gestion des parenthèses}
+
+\subsection{L'analyseur lexical}
+Je n'ai pas eu grand chose à modifier, j'ai juste modifié la fonction auxiliaire est\_séparé pour éviter que les parenthèses se retrouvent avec d'autres caractères dans un seul lexème.
+
+\subsection{L'analyseur syntaxique}
+Malheureusement, le programme que j'avais écrit précédemment se généralisait assez mal aux parenthèses : tout d'abord parce que comme le nombre de registres est fini, je devais utiliser la pile et ensuite parce queje ne pouvais pas me contenter d'empiler les résultats d'opérations en parcourant la liste de gauche à droite car sinon ça n'aurait pas respecté les priorités imposées par les parenthèses. J'ai donc décidé de faire un arbre plutôt qu'une liste.\par
+Pour que la liste prenne en compte les parenthèses, j'ai dû créer une fonction parenthesage pour pouvoir détecter le début et la fin des parenthèses : quand on tombe sur une parenthèse ouvrante, on lit la suite de la liste de lexèmes jusqu'à tomber sur une parenthèse fermante. Puis on met ce qu'on a parcouru dans le constructeur Parenthèse et on repart d'après la parenthèse fermante.\par
+Heureusement, je pouvais assez facilement transformer ma liste en arbre, ce qui m'a aussi permis de gérer facilement les parenthèses : je crée l'arbre correspondant à l'expression se trouvant dans la parenthèse et je le rajoute à la place de la parenthèse dans l'arbre principal. Malheureusement, cela ne m'a pas permis de mettre en place la priorité de la multiplication sur les autres opéations dans le cas suivant : \emph{ x op y op ... op ( a op b op ... op c ) * d}.
+
+\subsection{Le compilateur}
+En utilisant la structure d'arbre et la pile en assembleur, écrire le compilateur était plus facile mais j'ai du réécrire toutes les opérations car je ne pouvais pas généraliser celles de la partie précédente. La principlae difficulté était donc d'écrire du code assembleur.
+
+\section{Gestion des flottants}
+
+\subsection{L'analyseur lexical}
+Comme on peut trouver le caractère '.' dans les flottants et dans les opérations sur les flottants, j'ai commencé par remplacé les '.' des opérations par des ',' pour pouvoir faire la différence. Ensuite j'ai refait à peu près la même chose en rajoutant les homologues des constructeurs exp pour les flottants.
+
+\subsection{L'analyseur syntaxique}
+Pour l'analyseur syntaxique, j'ai dû ajouter tous les cas d'opérations sur les flottants dans les filtrages mais n'a pas induit de grandes différences. La principale difficulté a été que j'avais des erreurs "Failure: int\_of\_string" parce que sur les cas de base je devais faire attention à si je convertissait un entier ou un flottant.
+
+\subsection{Le compilateur}
+Ça a été la partie la compliquée car je ne savais pas bien manipuler les flottants en assembleur. Pour créer des flottants en assembleur, je me suis inspiré du code que Clément a partagé sur Discord. Je m'en suis aussi inspiré pour fabriquer une pile pour flottant avec l'emplacement d'adresse \%rsp : j'empile en insérant le flottant 8 octets avant le précédent et en modifiant la valeur de \%rsp en conséquence. Lorsque je dois effectuer une opération sur deux flottants, je dépile les deux éléments du bas de la pile, je les met dans \%xmm0 et \%xmm1 et j'effectue l'opération puis j'empile le contenu de \%xmm0. Pour faciliter l'utilisation de cette pile, j'ai créé les fonctions pushfloat et popfloat. Pour obtenir le résultat voulu, j'écrivais d'abord le code en assembleur puis je modifiait le code en OCaml pour obtenir le même code. J'ai eu du mal à coder l'addition, notamment parce que j'avais énormément d'erreurs "Segmentation fault : core dumped" mais une fois que j'ai réussi celle-là, les deux autres étaient quasiment identiques.
+
+\section{Lecture dans un fichier et prise en compte d'un argument}
+
+\subsection{Lecture dans un fichier}
+Je ne savais pas comment faire donc j'ai cherché sur Internet mais j'ai eu du mal à le faire fonctionner car je mettais en nom de fichier "fichier.exp" au lieu de "fichier.exp.txt".
+
+\subsection{Prise en compte d'un argument}
+Là aussi j'ai cherché sur Internet et j'ai trouvé la commande Sys.argv qui m'a permis de récupérer l'argument placé après Aritha. J'ai du modifié mon Makefile car avant le Makefile compilait directement le code assembleur mais ce n'est désormais plus possible car il faut d'abord exécuter Aritha avec un argument. Il faut donc maintenant utiliser la commande :
+\begin{lstlisting}
+make
+./Aritha "fichier.txt"
+make compile_assembleur
+\end{lstlisting}
+
+\section{Ce qui ne marche pas}
+\begin{itemize}
+\item La priorité de la multiplication
+\item int et float
+\item Trop de parenthèses imbriquées
+\end{itemize}
+
+\end{document}
